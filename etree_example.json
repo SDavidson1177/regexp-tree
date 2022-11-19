@@ -1,0 +1,12 @@
+{"type":"Assertion","kind":"^"},
+    {"type":"Repetition","expression":
+        {"type":"Group","capturing":true,"number":1,"expression":
+            {"type":"Disjunction",
+                "left":
+                    {"type":"Char","value":".","kind":"meta","symbol":".","codePoint":null},
+                "right":
+                    {"type":"CharacterClass","negative":true,"expressions":
+                        [{"type":"Char","value":"\"","kind":"simple","symbol":"\"","codePoint":34}]
+                    }}},
+        "quantifier":{"type":"Quantifier","kind":"*","greedy":true}},
+        {"type":"Char","value":"\"","kind":"simple","symbol":"\"","codePoint":34}
