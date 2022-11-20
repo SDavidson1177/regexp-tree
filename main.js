@@ -1,33 +1,13 @@
+/* Algorithm - Sketch */
 const regexpTree = require('./src/regexp-tree');
+let test_regex = regexpTree.toRegExp(/^((b\D)*ba([a-z]a)*)*$/);
+let ts_1 = 'bababababababababababababababababababababa';
+let ts_2 = 'bababababababababababababababababababababab';
 
-const re = regexpTree.toRegExp('/(.)*p/i');
-
-/*
- * This will generate the AST which can be used to examine for vulnerable patterns.
- * We should be able to scan the JSON output to quikly identify the vulnerable patterns.
- */
-let g_nfa = regexpTree.parse(/^(.|[^"])*"/);
-// console.log(JSON.stringify(g_nfa["body"]["expressions"]));
-
-/*
- * Optimize a loop after loop with common match string
- */
-let opt = regexpTree.optimize(/(ab*[a-z]*a)*/).toString();
-// console.log(opt);
-
-/*
- * By passing a handler to regexpTree.traverse, we can execute some code every time
- * a node is traversed. Could this be helpful?
- */
-
-// Algorithm - Sketch
-// 1.
-// Ex. regex: (b\D(ba){1,3}[a-z]a)*
-//     text:  babababababababa
-let test_regex = regexpTree.toRegExp(/^((b\D){1,2}ba([a-z]a){2,3})*$/);
-let ts_1 = 'babababababababababa';
-let ts_2 = 'babababababababab';
-console.log(test_regex.test(ts_1), test_regex.test(ts_2));
+// The first match should be quick. The second is slow due to the loop-after-loop pattern
+// and the fact that the pattern does not match the provided text (exponential backtracking).
+console.log('Traditional match: ', test_regex.test(ts_1));
+console.log('Traditional match: ', test_regex.test(ts_2));
 
 class SubExprSequence {
   constructor(count_min, count_max) {
@@ -48,7 +28,6 @@ class SubExprSequence {
     item.index = this.items.length;
     item.sequence = this;
     item.count_total = this.count_max;
-    console.log('Total ', this.count_max);
     this.length = this.items.length + 1;
     this.items.push(item);
   }
@@ -71,10 +50,18 @@ class SubExprSequence {
     this.text = t;
   }
 
+  /*
+   * Gets match text t.
+   *
+   * @return string
+   */
   getText(t) {
     return this.text;
   }
 
+  // Executes the matching algorithm
+  // Returns true if and only if the given text can be matched
+  // by this sequence.
   runMatch() {
     let missed_matches = 0;
     let start = true;
@@ -84,14 +71,23 @@ class SubExprSequence {
       i = Math.abs((i + 1) % this.items.length)
     ) {
       missed_matches = this.items[i].runMatch(start) ? 0 : missed_matches + 1;
-      console.log(i, missed_matches);
       start = false;
     }
 
     // Print resulting matches
+    // for (let i = 0; i < this.items.length; i++) {
+    //   console.log(this.items[i].matchpoints);
+    // }
+
     for (let i = 0; i < this.items.length; i++) {
-      console.log(this.items[i].matchpoints);
+      for (let j = 0; j < this.items[i].matchpoints.length; j++) {
+        if (this.items[i].matchpoints[j][1] == this.text.length) {
+          return true;
+        }
+      }
     }
+
+    return false;
   }
 }
 
@@ -192,8 +188,6 @@ class SubExpr {
       return false;
     }
 
-    console.log('Found ', start_index);
-
     // Match as much as possible
     for (let st of start_index) {
       let temp = JSON.parse(JSON.stringify(this.matchpoints));
@@ -230,26 +224,48 @@ class SubExpr {
 }
 
 // Tests
+// This will try to match ^((b\D)*ba([a-z]a)*)*$
+// We do this by breaking down the expression into three parts
+//
+// 1. (b\D){0,infinity}
+// 2. (ba){1}
+// 3. ([a-z]a){0,infinity}
+//
+// All parts wrapped by a looping operator. We then preform the less vulnerable matching
+// algorithm.
+//
+// This is a vulnerable expression that leads to catastrophic backtracking when
+// no match is found on: bababababababababababababababababababa
+// However, this algorithm detects there is no match without the
+// catastrohpic backtracking.
+
+//1. Good Match
 
 let group = new SubExprSequence(0, 4);
-group.setText('bababababa');
-let exp1 = new SubExpr(/b\D/, 1, 1);
-let exp2 = new SubExpr(/ba/, 0, 1);
-let exp3 = new SubExpr(/[a-z]a/, 2, 3);
+group.setText('bababababababababababababababababababababa');
+let exp1 = new SubExpr(/b\D/, 0, 30);
+let exp2 = new SubExpr(/ba/, 1, 1);
+let exp3 = new SubExpr(/[a-z]a/, 0, 30);
 
 // add expressions to sequences
 group.insert(exp1);
 group.insert(exp2);
-// group.insert(exp3);
+group.insert(exp3);
 
-group.runMatch();
-// console.log(exp1.matchpoints);
+let final_match = group.runMatch();
+console.log('Final match: ', final_match);
 
-// const reg = /b\D/;
-// let match_res = reg.exec("baba");
-// let match_text = match_res[0];
-// let match_index = match_res["index"];
-// console.log(match_index + match_text.length);
+// 2. Vulnerable
+let group2 = new SubExprSequence(0, 4);
+group.setText('bababababababababababababababababababababab');
+exp1 = new SubExpr(/b\D/, 0, 30);
+exp2 = new SubExpr(/ba/, 1, 1);
+exp3 = new SubExpr(/[a-z]a/, 0, 30);
 
-// 2.
-// console.log(regexpTree.parse(test_regex));
+// add expressions to sequences
+group2.insert(exp1);
+group2.insert(exp2);
+group2.insert(exp3);
+
+final_match = group.runMatch();
+console.log('Final match: ', final_match);
