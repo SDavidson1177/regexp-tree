@@ -36,6 +36,7 @@ class SubExprSequence {
     this.count_min = count_min;
     this.count_max = count_max;
     this.text = '';
+    this.length = 0;
   }
 
   /*
@@ -46,6 +47,9 @@ class SubExprSequence {
   insert(item) {
     item.index = this.items.length;
     item.sequence = this;
+    item.count_total = this.count_max;
+    console.log('Total ', this.count_max);
+    this.length = this.items.length + 1;
     this.items.push(item);
   }
 
@@ -77,9 +81,10 @@ class SubExprSequence {
     for (
       let i = 0;
       missed_matches < this.items.length;
-      i = (i + 1) % this.items.length
+      i = Math.abs((i + 1) % this.items.length)
     ) {
       missed_matches = this.items[i].runMatch(start) ? 0 : missed_matches + 1;
+      console.log(i, missed_matches);
       start = false;
     }
 
@@ -114,42 +119,56 @@ class SubExpr {
    *
    * @param list_of_subexpr: list of SubExpr
    *
-   * @return int
+   * @return set of int
    */
   findEarliest() {
+    // Returns a set of all the indices to start at next
+    const retval = new Set();
+
+    // All the start positions so far
+    const start_positions = this.matchpoints.map(item => item[0]);
+
     // Reached max match count
     if (this.count_total <= 0) {
-      return -1;
+      return retval;
     }
 
-    let i = (this.index - 1) % this.sequence.length;
-    for (
-      ;
-      this.sequence.length > 1 && i != this.index;
-      i = (i - 1) % this.sequence.length
-    ) {
+    let i = Math.abs((this.index - 1) % this.sequence.length);
+    for (; i != this.index; i = Math.abs((i - 1) % this.sequence.length)) {
       // Find the earliest SubExpr that count min greater than 0
+      let previous = this.sequence.get(i);
 
-      if (this.sequence.get(i).count_min > 0) {
-        previous = this.sequence.get(i);
-
-        // Find the next place to start matching
-        for (let j = 0; j < previous.matchpoints.length; j++) {
-          if (
-            previous.matchpoints[j][0] >
-            this.matchpoints[this.matchpoints.length - 1][1]
-          ) {
-            this.count_total--;
-            return previous.matchpoints[j][1]; // Start at the end of the previous match
-          }
+      // Can appear after this subexpression. However, may not.
+      for (let j = 0; j < previous.matchpoints.length; j++) {
+        if (
+          this.matchpoints.length == 0 ||
+          !start_positions.includes(previous.matchpoints[j][1])
+        ) {
+          retval.add(previous.matchpoints[j][1]); // Start at the end of the previous match
         }
+      }
 
-        return -1; // no valid location
+      // Since this subexpression must be matched at least once, we must appear after it
+      if (previous.count_min > 0) {
+        break;
+      }
+    }
+
+    if (i == this.index) {
+      // Must also add our matchpoints
+      for (let j = 0; j < this.matchpoints.length; j++) {
+        if (!start_positions.includes(this.matchpoints[j][1])) {
+          retval.add(this.matchpoints[j][1]);
+        }
+      }
+
+      if (this.matchpoints.length == 0) {
+        retval.add(0);
       }
     }
 
     this.count_total--;
-    return this.matchpoints[this.matchpoints.length - 1][1];
+    return retval;
   }
 
   /*
@@ -160,34 +179,49 @@ class SubExpr {
    */
   runMatch(start) {
     let matches_found = false;
-    let start_index = start ? 0 : this.findEarliest();
-    let temp = JSON.parse(JSON.stringify(this.matchpoints));
-    let i = 0;
+    let start_index;
 
-    // Match as much as possible
-    for (; i < this.count_max; i++) {
-      let match_string = this.sequence.getText().slice(start_index);
-      let match_res = this.pattern.exec(match_string);
-
-      if (match_res == null || match_res['index'] != 0) {
-        // Must match from start of the string
-        break;
-      }
-
-      matches_found = true;
-
-      // Remember the matches
-      let match_text = match_res[0];
-      this.matchpoints.push([start_index, start_index + match_text.length]);
-
-      // Increment to the next index
-      start_index += match_text.length;
+    if (start) {
+      start_index = new Set();
+      start_index.add(0);
+    } else {
+      start_index = this.findEarliest();
     }
 
-    // Make sure enough matches were found
-    if (i < this.count_min) {
-      this.matchpoints = JSON.parse(JSON.stringify(temp));
+    if (start_index.size == 0) {
       return false;
+    }
+
+    console.log('Found ', start_index);
+
+    // Match as much as possible
+    for (let st of start_index) {
+      let temp = JSON.parse(JSON.stringify(this.matchpoints));
+      let i = 0;
+
+      for (; i < this.count_max; i++) {
+        let match_string = this.sequence.getText().slice(st);
+        let match_res = this.pattern.exec(match_string);
+
+        if (match_res == null || match_res['index'] != 0) {
+          // Must match from start of the string
+          break;
+        }
+
+        // Remember the matches
+        let match_text = match_res[0];
+        this.matchpoints.push([st, st + match_text.length]);
+
+        // Increment to the next index
+        st += match_text.length;
+      }
+
+      // Make sure enough matches were found
+      if (i < this.count_min) {
+        this.matchpoints = JSON.parse(JSON.stringify(temp));
+      } else {
+        matches_found = true;
+      }
     }
 
     // Return whether or not matches were found
@@ -197,25 +231,25 @@ class SubExpr {
 
 // Tests
 
-let group = new SubExprSequence(0, 10);
-group.setText('bababa');
-let exp1 = new SubExpr(/b\D/, 1, 2);
-let exp2 = new SubExpr(/ba/, 1, 1);
+let group = new SubExprSequence(0, 4);
+group.setText('bababababa');
+let exp1 = new SubExpr(/b\D/, 1, 1);
+let exp2 = new SubExpr(/ba/, 0, 1);
 let exp3 = new SubExpr(/[a-z]a/, 2, 3);
 
 // add expressions to sequences
 group.insert(exp1);
-// group.insert(exp2);
+group.insert(exp2);
 // group.insert(exp3);
 
-console.log(exp1.runMatch(true));
-console.log(exp1.matchpoints);
+group.runMatch();
+// console.log(exp1.matchpoints);
 
-const reg = /b\D/;
-let match_res = reg.exec('baba');
-let match_text = match_res[0];
-let match_index = match_res['index'];
-console.log(match_index + match_text.length);
+// const reg = /b\D/;
+// let match_res = reg.exec("baba");
+// let match_text = match_res[0];
+// let match_index = match_res["index"];
+// console.log(match_index + match_text.length);
 
 // 2.
-console.log(regexpTree.parse(test_regex));
+// console.log(regexpTree.parse(test_regex));
