@@ -1,13 +1,13 @@
 /* Algorithm - Sketch */
-const regexpTree = require('./src/regexp-tree');
-let test_regex = regexpTree.toRegExp(/^((b\D)*ba([a-z]a)*)*$/);
-let ts_1 = 'bababababababababababababababababababababa';
-let ts_2 = 'bababababababababababababababababababababab';
+// const regexpTree = require('./src/regexp-tree');
+// let test_regex = regexpTree.toRegExp(/^((b\D)*ba([a-z]a)*)*$/);
+// let ts_1 = 'bababababababababababababababababababababa';
+// let ts_2 = 'bababababababababababababababababababababab';
 
 // The first match should be quick. The second is slow due to the loop-after-loop pattern
 // and the fact that the pattern does not match the provided text (exponential backtracking).
-console.log('Traditional match: ', test_regex.test(ts_1));
-console.log('Traditional match: ', test_regex.test(ts_2));
+// console.log('Traditional match: ', test_regex.test(ts_1));
+// console.log('Traditional match: ', test_regex.test(ts_2));
 
 class SubExprSequence {
   constructor(count_min, count_max) {
@@ -79,11 +79,15 @@ class SubExprSequence {
     //   console.log(this.items[i].matchpoints);
     // }
 
-    for (let i = 0; i < this.items.length; i++) {
+    for (let i = this.items.length - 1; i >= 0; i--) {
       for (let j = 0; j < this.items[i].matchpoints.length; j++) {
         if (this.items[i].matchpoints[j][1] == this.text.length) {
           return true;
         }
+      }
+
+      if (this.items[i].count_min > 0) {
+        break;
       }
     }
 
@@ -129,8 +133,18 @@ class SubExpr {
       return retval;
     }
 
-    let i = Math.abs((this.index - 1) % this.sequence.length);
-    for (; i != this.index; i = Math.abs((i - 1) % this.sequence.length)) {
+    let i =
+      this.index == 0
+        ? this.sequence.length - 1
+        : Math.abs((this.index - 1) % this.sequence.length);
+    for (
+      ;
+      i != this.index;
+      i =
+        i == 0
+          ? this.sequence.length - 1
+          : Math.abs((i - 1) % this.sequence.length)
+    ) {
       // Find the earliest SubExpr that count min greater than 0
       let previous = this.sequence.get(i);
 
@@ -182,6 +196,7 @@ class SubExpr {
       start_index.add(0);
     } else {
       start_index = this.findEarliest();
+      // console.log(this.index, " found earliest ", start_index);
     }
 
     if (start_index.size == 0) {
@@ -241,7 +256,9 @@ class SubExpr {
 
 //1. Good Match
 
-let group = new SubExprSequence(0, 4);
+console.log('Start Tests');
+
+let group = new SubExprSequence(0, 10);
 group.setText('bababababababababababababababababababababa');
 let exp1 = new SubExpr(/b\D/, 0, 30);
 let exp2 = new SubExpr(/ba/, 1, 1);
@@ -256,8 +273,8 @@ let final_match = group.runMatch();
 console.log('Final match: ', final_match);
 
 // 2. Vulnerable
-let group2 = new SubExprSequence(0, 4);
-group.setText('bababababababababababababababababababababab');
+let group2 = new SubExprSequence(0, 10);
+group2.setText('bababababababababababababababababababababab');
 exp1 = new SubExpr(/b\D/, 0, 30);
 exp2 = new SubExpr(/ba/, 1, 1);
 exp3 = new SubExpr(/[a-z]a/, 0, 30);
@@ -267,5 +284,35 @@ group2.insert(exp1);
 group2.insert(exp2);
 group2.insert(exp3);
 
-final_match = group.runMatch();
+final_match = group2.runMatch();
+console.log('Final match: ', final_match);
+
+// Check correctness. Should not match
+let group3 = new SubExprSequence(0, 10);
+group3.setText('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+exp1 = new SubExpr(/aaaa/, 1, 1);
+exp2 = new SubExpr(/a/, 1, 3);
+exp3 = new SubExpr(/aaa/, 1, 1);
+
+// add expressions to sequences
+group3.insert(exp1);
+group3.insert(exp2);
+group3.insert(exp3);
+
+final_match = group3.runMatch();
+console.log('Final match: ', final_match);
+
+// Check correctness. Should match
+let group4 = new SubExprSequence(0, 10);
+group4.setText('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+exp1 = new SubExpr(/aaaa/, 1, 1);
+exp2 = new SubExpr(/a/, 1, 3);
+exp3 = new SubExpr(/aaa/, 1, 1);
+
+// add expressions to sequences
+group4.insert(exp1);
+group4.insert(exp2);
+group4.insert(exp3);
+
+final_match = group4.runMatch();
 console.log('Final match: ', final_match);
