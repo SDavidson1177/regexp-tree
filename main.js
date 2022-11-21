@@ -1,14 +1,18 @@
 /* Algorithm - Sketch */
-// const regexpTree = require('./src/regexp-tree');
-// let test_regex = regexpTree.toRegExp(/^((b\D)*ba([a-z]a)*)*$/);
-// let ts_1 = 'bababababababababababababababababababababa';
-// let ts_2 = 'bababababababababababababababababababababab';
 
-// The first match should be quick. The second is slow due to the loop-after-loop pattern
+// Below is a reference example of a loop-in-loop vulnerability
+// and the corresponding match string and attack string
+const regexpTree = require('./src/regexp-tree');
+let test_regex = regexpTree.toRegExp(/^((b\D)*ba([a-z]a)*)*$/);
+let ts_1 = 'bababababababababababababababababababababa';
+let ts_2 = 'bababababababababababababababababababababab';
+
+// The first match should be quick. The second is slow due to the loop-in-loop pattern
 // and the fact that the pattern does not match the provided text (exponential backtracking).
-// console.log('Traditional match: ', test_regex.test(ts_1));
-// console.log('Traditional match: ', test_regex.test(ts_2));
+console.log('Traditional match: ', test_regex.test(ts_1));
+console.log('Traditional match: ', test_regex.test(ts_2));
 
+// Classes to represent vulnerable patterns
 class SubExprSequence {
   constructor(count_min, count_max) {
     // Array of SubExpr
@@ -53,7 +57,7 @@ class SubExprSequence {
   /*
    * Gets match text t.
    *
-   * @return string
+   * @returns string
    */
   getText(t) {
     return this.text;
@@ -62,6 +66,8 @@ class SubExprSequence {
   // Executes the matching algorithm
   // Returns true if and only if the given text can be matched
   // by this sequence.
+  //
+  // @returns bool - true for match and false for no match
   runMatch() {
     let missed_matches = 0;
     let start = true;
@@ -119,7 +125,7 @@ class SubExpr {
    *
    * @param list_of_subexpr: list of SubExpr
    *
-   * @return set of int
+   * @returns set of int
    */
   findEarliest() {
     // Returns a set of all the indices to start at next
